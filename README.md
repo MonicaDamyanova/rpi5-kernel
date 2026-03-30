@@ -14,6 +14,8 @@ There are only a total of 4 files needed for boot:
 - start4.elf
 - config.txt
 - fixup4.dat
+
+
 And it is optional to add bcm2712-rpi-5-b.dtb, but I will be using it
 eventually.
 
