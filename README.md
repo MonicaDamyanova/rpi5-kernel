@@ -7,7 +7,7 @@ a very basic kernel.
 Using any UART debugger, power on a Raspberry Pi 5 with the kernel8.img file
 as compiled using a cross compiler.
 
-How to build a [cross compiler] (https://wiki.osdev.org/GCC_Cross-Compiler).
+How to build a [cross compiler](https://wiki.osdev.org/GCC_Cross-Compiler).
 
 There are only a total of 4 files needed for boot:
 - kernel8.img
