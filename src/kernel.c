@@ -1,32 +1,29 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define read32(addr) (*(volatile uint32_t*)(addr))
-#define write32(addr, value) (*(volatile uint32_t*)(addr) = (value))
+#include "mailbox.h"
+#include "uart.h"
 
-const uintptr_t MMIO_BASE = 0x107c000000UL;
-const uintptr_t UART0_BASE = MMIO_BASE + 0x1001000;
-const uintptr_t MAILBOX_BASE = MMIO_BASE + 0x13880;
+//volatile uint32_t uart_mbox[9] __attribute__((aligned(16))) = {
+//    36, 0, MBOX_CLKRATE_TAG, 12, 8, 2, 0, 0, 0
+//};
 
-#define UART0_DR        (UART0_BASE + 0x00)
-#define UART0_RSRECR    (UART0_BASE + 0x04)
-#define UART0_FR        (UART0_BASE + 0x18)
-#define UART0_ILPR      (UART0_BASE + 0x20)
-#define UART0_IBRD      (UART0_BASE + 0x24)
-#define UART0_FBRD      (UART0_BASE + 0x28)
-#define UART0_LCRH      (UART0_BASE + 0x2C)
-#define UART0_CR        (UART0_BASE + 0x30)
+static volatile uint32_t mbox[7] __attribute__((aligned(16)));
 
-#define MBOX_READ       (*(volatile uint32_t*)(MAILBOX_BASE + 0x00))
-#define MBOX_STATUS     ((uint32_t*)(MAILBOX_BASE + 0x18))
-#define MBOX_WRITE      (*(volatile uint32_t*)(MAILBOX_BASE + 0x20))
-#define MBOX_FULL       0x80000000
-#define MBOX_EMPTY      0x40000000
-#define MBOX_CLKRATE_TAG 0x30002
+void mailbox_test(void) {
+    mbox[0] = 7 * 4;          // total size in bytes (28)
+    mbox[1] = 0x00000000;     // request
+    mbox[2] = 0x00010002;     // GET_BOARD_REVISION
+    mbox[3] = 4;              // value buffer size
+    mbox[4] = 0;              // tag request
+    mbox[5] = 0;              // value placeholder
+    mbox[6] = 0;              // end tag
+}
 
-volatile uint32_t uart_mbox[9] __attribute__((aligned(16))) = {
-    36, 0, MBOX_CLKRATE_TAG, 12, 8, 2, 0, 0, 0
-};
+void mailbox_call(void) {
+    mailbox_write(MBOX_CH_PROP, (uint64_t)mbox);
+    mailbox_read(MBOX_CH_PROP);
+}
 
 void uart_putc(unsigned char c) {
 	while (read32(UART0_FR) & (1 << 5));
@@ -40,24 +37,38 @@ void uart_puts(const char* s) {
     }
 }
 
+void uart_put_u32(uint32_t value) {
+    char buf[11]; // max 10 digits + '\0'
+    int i = 10;
+    buf[i] = '\0';
+
+    if (value == 0) {
+        uart_putc('0');
+        return;
+    }
+
+    while (value > 0) {
+        buf[--i] = '0' + (value % 10);
+        value /= 10;
+    }
+
+    uart_puts(&buf[i]);
+}
+
+void uart_put_hex(uint64_t value) {
+    uart_puts("0x");
+
+    for (int i = 60; i >= 0; i -= 4) {
+        uint8_t digit = (value >> i) & 0xF;
+        uart_putc(digit < 10 ? '0' + digit : 'A' + digit - 10);
+    }
+}
+
 void kernel_main() {
     write32(UART0_CR, 0x0);
 
     uint32_t uart_ibrd = 23;
     uint32_t uart_fbrd = 56;
-    //uint32_t uart_baud = 115200;
-
-    //uint32_t addr = ((uint32_t)(uintptr_t)uart_mbox) & ~0xF;
-    //while (read32(MBOX_STATUS) & 0x80000000) { }
-    //write32(MBOX_WRITE, addr);
-    //while ( (read32(MBOX_STATUS) & 0x40000000) || read32(MBOX_READ) != addr ) { }
-    
-    //if (mailbox_call(uart_mbox,8)){
-    //uint32_t uart_clk = uart_mbox[6];
-    //uart_ibrd = uart_clk / (16 * uart_baud);
-    //uint32_t rem = uart_clk % (16 * uart_baud);
-    //uart_fbrd = (rem * 64 + uart_baud/2) / uart_baud;
-    //}
 
     write32(UART0_IBRD, uart_ibrd);
     write32(UART0_FBRD, uart_fbrd);
@@ -67,6 +78,12 @@ void kernel_main() {
 
     //uart_putc('H');
     uart_puts("Hello, Kernel!\r\n");
+    mailbox_test();
+    mailbox_call();
+    uart_puts("Firmware rev: ");
+    uart_put_hex(mbox[5]);
+    uart_putc('\r');
+    uart_putc('\n');
     
     while (1) {}
 }
