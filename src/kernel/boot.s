@@ -1,6 +1,5 @@
-.section ".text.boot"
-
 .global _start
+.section .text.boot
 
 _start:
     // read cpu id, stop slave cores
@@ -19,6 +18,7 @@ _start:
     // clear bss
     ldr     x1, =__bss_start
     ldr     w2, =__bss_size
+
 3:  cbz     w2, 4f
     str     xzr, [x1], #8
     sub     w2, w2, #1

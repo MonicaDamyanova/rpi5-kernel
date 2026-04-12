@@ -3,6 +3,7 @@
 
 #include "mailbox.h"
 #include "uart.h"
+#include "font.h"
 
 void uart_putc(unsigned char c) {
 	while (read32(UART0_FR) & (1 << 5));
@@ -57,30 +58,10 @@ void kernel_main() {
 
     uart_puts("Hello, Kernel!\r\n");    
 
-    mailbox_message msg;
-    property_init(&msg);
-    uint32_t *rev = property_add_get_tag(&msg, MBOX_TAG_BOARD_REVISION, 4);
-    uint32_t *mem = property_add_get_tag(&msg, MBOX_TAG_ARM_MEMORY, 8);
-    property_end(&msg);
-    property_call(&msg);
-
-    uint32_t board_revision = rev[0];
-    uint32_t mem_size = mem[1];
-
-    uart_puts("Firmware rev: ");
-    uart_put_hex(board_revision);
-    uart_putc('\r');
-    uart_putc('\n');
-
-    uart_puts("Memory Size: ");
-    uart_put_hex(mem_size);
-    uart_putc('\r');
-    uart_putc('\n');
-
     mailbox_message fb;
     property_init(&fb);
-    property_add_set_tag(&fb, MBOX_TAG_SET_PHYS_WH, 8, (uint32_t[]){640, 480});
-    property_add_set_tag(&fb, MBOX_TAG_SET_VIRT_WH, 8, (uint32_t[]){640, 480});
+    property_add_set_tag(&fb, MBOX_TAG_SET_PHYS_WH, 8, (uint32_t[]){640, 640});
+    property_add_set_tag(&fb, MBOX_TAG_SET_VIRT_WH, 8, (uint32_t[]){640, 640});
     property_add_set_tag(&fb, MBOX_TAG_SET_DEPTH, 4, (uint32_t[]){32});
     uint32_t * fb_data = property_add_set_tag(&fb, MBOX_TAG_ALLOCATE_BUFFER, 8, (uint32_t[]){16, 0});
     uint32_t * pitch_data = property_add_get_tag(&fb, MBOX_TAG_GET_PITCH, 4);
@@ -91,11 +72,25 @@ void kernel_main() {
     uint32_t fb_size = fb_data[1];
     uint32_t pitch = pitch_data[0];
 
-    for (uint32_t y = 0; y < 480; y++) {
-        for (uint32_t x = 0; x < 640; x++) {
-            fb_ptr[y * (pitch / 4) + x] = 0x009900; // green screen
+    //for (uint32_t y = 0; y < 1080; y++) {
+    //    for (uint32_t x = 0; x < 1920; x++) {
+    //        fb_ptr[y * (pitch / 4) + x] = 0x006600;
+    //    }
+    //}
+
+    const char * text = "Hello, Kernel!";
+    uart_puts(text);
+    
+    for (uint8_t i = 0; text[i] != '\0'; i++) {
+        for (uint32_t y = 0; y < 8; y++) {
+            uint8_t c = text[i];
+            for (uint32_t x = 0; x < 8; x++) {
+                if (font[c][y] & (1 << (7-x))) {
+                    fb_ptr[(0 + y) * (pitch / 4) + (0 + x + i*8)] = 0x00FF00;
+                }
+            }
         }
     }
-    
+
     while (1) {}
 }
